@@ -1,0 +1,56 @@
+services:
+
+  # ── PostgreSQL ────────────────────────────────────────────────
+  postgres:
+    image: postgres:17-alpine
+    container_name: friends-postgres
+    restart: unless-stopped
+    env_file: .env                          # reads POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro   # runs once on first start
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - friends-net
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── Spring Boot App ──────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: friends-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env                          # reads DB_URL, DB_USERNAME, DB_PASSWORD, SERVER_PORT
+    ports:
+      - "8080:8080"
+    networks:
+      - friends-net
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ── Volumes & Networks ─────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  friends-net:
+    driver: bridge

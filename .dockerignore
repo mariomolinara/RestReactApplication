@@ -1,0 +1,15 @@
+target
+.git
+.idea
+.env
+node_modules
+*.md
+docker
+docker-compose.yml
+Dockerfile
+.dockerignore
+.gitignore
+.gitattributes
+.mvn
+mvnw
+mvnw.cmd
