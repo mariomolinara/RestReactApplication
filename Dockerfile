@@ -24,8 +24,11 @@ COPY --from=builder /workspace/target/RestReactApplication-0.0.1-SNAPSHOT.jar ap
 EXPOSE 8080
 
 # Graceful shutdown + container health
-HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-  CMD wget -qO- http://localhost:8080/api/v1/friends || exit 1
+# /actuator/health is provided by spring-boot-starter-actuator.
+# It checks both the app itself and its DB connection (DataSource health indicator).
+# start-period is set to 60 s to give Spring Boot time to start before the first check.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD wget -qO- http://localhost:8080/actuator/health | grep -q '"status":"UP"' || exit 1
 
 ENTRYPOINT ["java", \
   "-XX:+UseContainerSupport", \

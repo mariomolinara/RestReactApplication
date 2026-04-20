@@ -104,6 +104,8 @@ $env:DB_PASSWORD="friends_password"
 
 ### Quick API examples
 
+#### PowerShell
+
 ```powershell
 # Create
 Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/v1/friends" `
@@ -123,6 +125,29 @@ Invoke-RestMethod -Method Put -Uri "http://localhost:8080/api/v1/friends/1" `
 
 # Delete
 Invoke-RestMethod -Method Delete -Uri "http://localhost:8080/api/v1/friends/1"
+```
+
+#### curl
+
+```bash
+# Create
+curl -X POST http://localhost:8080/api/v1/friends \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Alice","email":"alice@example.com","phone":"123"}'
+
+# List all
+curl http://localhost:8080/api/v1/friends
+
+# Get by ID
+curl http://localhost:8080/api/v1/friends/1
+
+# Update
+curl -X PUT http://localhost:8080/api/v1/friends/1 \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Alice Updated","email":"alice@example.com","phone":"456"}'
+
+# Delete
+curl -X DELETE http://localhost:8080/api/v1/friends/1
 ```
 
 ## Environment Variables

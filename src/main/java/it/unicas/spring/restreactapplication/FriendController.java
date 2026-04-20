@@ -2,10 +2,7 @@ package it.unicas.spring.restreactapplication;
 
 import java.net.URI;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -175,6 +172,13 @@ public class FriendController {
      */
     @PostMapping
     public ResponseEntity<Friend> create(@RequestBody Friend friend) {
+        // Force id to null so Hibernate always calls persist() (INSERT) rather than
+        // merge() (UPDATE). If the client accidentally sends a stale id from a
+        // previously deleted record, merge() would return null in Hibernate 6+
+        // because the entity no longer exists in the database, causing a
+        // NullPointerException on saved.getId() below.
+        friend.setId(null);
+
         Friend saved = friendRepository.save(friend);
         return ResponseEntity
                 .created(URI.create("/api/v1/friends/" + saved.getId()))

@@ -92,7 +92,21 @@ function App() {
     });
 
     if (!response.ok) {
-      setError("Operation failed. Check unique email and required fields.");
+      // Translate HTTP status codes into user-friendly messages.
+      // 409 Conflict     → duplicate email (unique constraint violated).
+      // 400 Bad Request  → missing required field (name or email).
+      // 404 Not Found    → trying to update/delete a record that no longer exists.
+      // 500+             → unexpected server error (e.g. DB unreachable).
+      const status = response.status;
+      if (status === 409) {
+        setError("Operation failed: that email address is already used by another friend.");
+      } else if (status === 400) {
+        setError("Operation failed: name and email are required fields.");
+      } else if (status === 404) {
+        setError("Operation failed: friend not found (may have been deleted).");
+      } else {
+        setError(`Operation failed (HTTP ${status}). Check the server logs for details.`);
+      }
       return;
     }
 
