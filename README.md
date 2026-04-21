@@ -104,50 +104,191 @@ $env:DB_PASSWORD="friends_password"
 
 ### Quick API examples
 
-#### PowerShell
+Per ogni operazione vengono mostrati:
+1. Il **payload HTTP raw** (request + response headers e body)
+2. Il comando **PowerShell** (`Invoke-RestMethod` — built-in su Windows PowerShell 5.1+ / PowerShell 7+)
+3. Il comando **curl** (pre-installato su Linux/macOS; su Windows disponibile da Windows 10 1803+ o installabile via `winget install curl.curl`)
 
+---
+
+#### 1 — Create (POST)
+
+Crea un nuovo amico. Il server risponde `201 Created` con il record appena inserito (incluso l'`id` assegnato dal DB).
+
+**HTTP raw**
+```
+→ REQUEST
+POST /api/v1/friends HTTP/1.1
+Host: localhost:8080
+Content-Type: application/json
+Accept: application/json
+
+{"name":"Alice","email":"alice@example.com","phone":"123"}
+
+← RESPONSE
+HTTP/1.1 201 Created
+Content-Type: application/json
+Location: /api/v1/friends/1
+
+{"id":1,"name":"Alice","email":"alice@example.com","phone":"123"}
+```
+
+**PowerShell** *(Windows PowerShell 5.1+ / PowerShell 7+)*
 ```powershell
-# Create
+# -Method Post      → verbo HTTP
+# -ContentType      → imposta l'header Content-Type
+# -Body             → payload JSON da inviare
+# L'output è già deserializzato come oggetto PowerShell
 Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/v1/friends" `
   -ContentType "application/json" `
   -Body '{"name":"Alice","email":"alice@example.com","phone":"123"}'
+```
 
-# List all
+**curl** *(Linux/macOS/Windows con curl installato)*
+```bash
+# -v              → verbose: mostra tutti gli header di request e response
+# -X POST         → specifica il metodo HTTP
+# -H              → aggiunge un header alla request
+# -d              → corpo della request (JSON)
+curl -v -X POST http://localhost:8080/api/v1/friends \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{"name":"Alice","email":"alice@example.com","phone":"123"}'
+```
+
+---
+
+#### 2 — List all (GET)
+
+Restituisce l'array JSON di tutti gli amici. Risposta `200 OK`.
+
+**HTTP raw**
+```
+→ REQUEST
+GET /api/v1/friends HTTP/1.1
+Host: localhost:8080
+Accept: application/json
+
+← RESPONSE
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+[{"id":1,"name":"Alice","email":"alice@example.com","phone":"123"}]
+```
+
+**PowerShell**
+```powershell
+# GET è il metodo di default, quindi -Method Get è opzionale
 Invoke-RestMethod -Method Get -Uri "http://localhost:8080/api/v1/friends"
+```
 
-# Get by ID
+**curl**
+```bash
+# Senza -X il metodo è GET per default
+# -v mostra gli header completi di request e response
+curl -v http://localhost:8080/api/v1/friends \
+  -H "Accept: application/json"
+```
+
+---
+
+#### 3 — Get by ID (GET)
+
+Restituisce un singolo amico per `id`. Risposta `200 OK` oppure `404 Not Found` se non esiste.
+
+**HTTP raw**
+```
+→ REQUEST
+GET /api/v1/friends/1 HTTP/1.1
+Host: localhost:8080
+Accept: application/json
+
+← RESPONSE
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{"id":1,"name":"Alice","email":"alice@example.com","phone":"123"}
+```
+
+**PowerShell**
+```powershell
+# Sostituire 1 con l'id effettivo del record
 Invoke-RestMethod -Method Get -Uri "http://localhost:8080/api/v1/friends/1"
+```
 
-# Update
+**curl**
+```bash
+# Sostituire /1 con l'id effettivo del record
+curl -v http://localhost:8080/api/v1/friends/1 \
+  -H "Accept: application/json"
+```
+
+---
+
+#### 4 — Update (PUT)
+
+Aggiorna completamente un amico esistente. Risposta `200 OK` con il record aggiornato.
+
+**HTTP raw**
+```
+→ REQUEST
+PUT /api/v1/friends/1 HTTP/1.1
+Host: localhost:8080
+Content-Type: application/json
+Accept: application/json
+
+{"name":"Alice Updated","email":"alice@example.com","phone":"456"}
+
+← RESPONSE
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{"id":1,"name":"Alice Updated","email":"alice@example.com","phone":"456"}
+```
+
+**PowerShell**
+```powershell
+# -Method Put → verbo HTTP per aggiornamento completo della risorsa
 Invoke-RestMethod -Method Put -Uri "http://localhost:8080/api/v1/friends/1" `
   -ContentType "application/json" `
   -Body '{"name":"Alice Updated","email":"alice@example.com","phone":"456"}'
+```
 
-# Delete
+**curl**
+```bash
+# -X PUT → sovrascrive completamente la risorsa identificata dall'URI
+curl -v -X PUT http://localhost:8080/api/v1/friends/1 \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{"name":"Alice Updated","email":"alice@example.com","phone":"456"}'
+```
+
+---
+
+#### 5 — Delete (DELETE)
+
+Elimina un amico per `id`. Risposta `204 No Content` (corpo vuoto).
+
+**HTTP raw**
+```
+→ REQUEST
+DELETE /api/v1/friends/1 HTTP/1.1
+Host: localhost:8080
+
+← RESPONSE
+HTTP/1.1 204 No Content
+```
+
+**PowerShell**
+```powershell
+# La risposta è vuota (204), quindi non viene stampato nulla
 Invoke-RestMethod -Method Delete -Uri "http://localhost:8080/api/v1/friends/1"
 ```
 
-#### curl
-
+**curl**
 ```bash
-# Create
-curl -X POST http://localhost:8080/api/v1/friends \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Alice","email":"alice@example.com","phone":"123"}'
-
-# List all
-curl http://localhost:8080/api/v1/friends
-
-# Get by ID
-curl http://localhost:8080/api/v1/friends/1
-
-# Update
-curl -X PUT http://localhost:8080/api/v1/friends/1 \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Alice Updated","email":"alice@example.com","phone":"456"}'
-
-# Delete
-curl -X DELETE http://localhost:8080/api/v1/friends/1
+# -v mostra che la risposta è 204 No Content senza body
+curl -v -X DELETE http://localhost:8080/api/v1/friends/1
 ```
 
 ## Environment Variables
