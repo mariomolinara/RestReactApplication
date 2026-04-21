@@ -1,37 +1,109 @@
+# =============================================================================
+# APPLICATION CONFIGURATION — Spring Boot (YAML)
+# =============================================================================
+#
+# Every value that follows the pattern ${ENV_VAR:default} is resolved at
+# startup using the following priority order (highest → lowest):
+#
+#   1. OS environment variable (export / $env: / Docker -e / docker-compose env_file)
+#   2. JVM system property   (-DVAR=value passed to the JVM)
+#   3. The default value after the colon inside ${}
+#
+# -----------------------------------------------------------------------------
+# HOW TO SET ENVIRONMENT VARIABLES
+# -----------------------------------------------------------------------------
+#
+# ── Linux / macOS (Bash / Zsh) ───────────────────────────────────────────────
+#   Export in the current shell session (lost on terminal close):
+#     export DB_URL=jdbc:postgresql://localhost:5432/friendsdb
+#     export DB_USERNAME=friends_user
+#     export DB_PASSWORD=friends_password
+#     ./mvnw spring-boot:run
+#
+#   One-liner (variable scoped to the single command):
+#     DB_URL=jdbc:postgresql://localhost:5432/friendsdb ./mvnw spring-boot:run
+#
+#   Persistent (add to ~/.bashrc or ~/.zshrc):
+#     echo 'export APP_SECURITY_PASSWORD=mysecret' >> ~/.bashrc
+#     source ~/.bashrc
+#
+# ── Windows PowerShell ───────────────────────────────────────────────────────
+#   Session-scoped (lost when the terminal is closed):
+#     $env:DB_URL      = "jdbc:postgresql://localhost:5432/friendsdb"
+#     $env:DB_USERNAME = "friends_user"
+#     $env:DB_PASSWORD = "friends_password"
+#     .\mvnw.cmd spring-boot:run
+#
+#   System-wide (persists across reboots, requires restart of the terminal):
+#     [System.Environment]::SetEnvironmentVariable("APP_SECURITY_PASSWORD","mysecret","User")
+#
+# ── Docker Compose (.env file) ───────────────────────────────────────────────
+#   Create a file named ".env" in the same directory as docker-compose.yml.
+#   Docker Compose automatically reads it and passes variables to containers.
+#   Example .env file:
+#
+#     POSTGRES_DB=friendsdb
+#     POSTGRES_USER=friends_user
+#     POSTGRES_PASSWORD=friends_password
+#     DB_URL=jdbc:postgresql://postgres:5432/friendsdb
+#     DB_USERNAME=friends_user
+#     DB_PASSWORD=friends_password
+#     APP_SECURITY_USERNAME=admin
+#     APP_SECURITY_PASSWORD=mysecret
+#     SERVER_PORT=8080
+#
+#   ⚠️  Never commit .env files containing real passwords to version control.
+#       Add ".env" to your .gitignore.
+#
+# ── Docker run (inline) ──────────────────────────────────────────────────────
+#   docker run -e APP_SECURITY_PASSWORD=mysecret -p 8080:8080 myapp:latest
+#
+# =============================================================================
+
 spring:
   application:
     name: RestReactApplication
 
-  # ── DataSource (PostgreSQL) ──────────────────────────────────
+  # ── DataSource (PostgreSQL) ──────────────────────────────────────────────
+  # Connection URL, username and password are read from environment variables
+  # so they never have to be hard-coded here.
+  # The default values allow the app to start locally without any extra setup.
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/friendsdb}
+    url:      ${DB_URL:jdbc:postgresql://localhost:5432/friendsdb}
     username: ${DB_USERNAME:friends_user}
     password: ${DB_PASSWORD:friends_password}
-    hikari:
-      maximum-pool-size: 10
-      minimum-idle: 2
-      idle-timeout: 30000        # 30 s
-      connection-timeout: 20000  # 20 s
-      max-lifetime: 1800000      # 30 min
 
-  # ── JPA / Hibernate ──────────────────────────────────────────
+    # HikariCP connection pool — tuned for a small containerised deployment.
+    hikari:
+      maximum-pool-size: 10    # total connections kept open towards PostgreSQL
+      minimum-idle: 2          # connections kept ready even when traffic is low
+      idle-timeout: 30000      # 30 s  — remove an idle connection after this delay
+      connection-timeout: 20000 # 20 s — throw if no connection is available
+      max-lifetime: 1800000    # 30 min — recycle connections to avoid stale handles
+
+  # ── JPA / Hibernate ──────────────────────────────────────────────────────
   jpa:
     hibernate:
+      # "update" applies schema changes automatically on startup.
+      # Use "validate" or a migration tool (Flyway / Liquibase) in production.
       ddl-auto: update
+    # Disables the Open-Session-In-View anti-pattern (keeps connections shorter).
     open-in-view: false
     properties:
       hibernate:
-        format_sql: true
+        format_sql: true         # pretty-print SQL in the log (easier to read)
         jdbc:
-          batch_size: 25
-        order_inserts: true
-        order_updates: true
+          batch_size: 25         # group up to 25 INSERT/UPDATE statements per round-trip
+        order_inserts: true      # reorder inserts to maximise batch efficiency
+        order_updates: true      # same for updates
 
+# ── Server ───────────────────────────────────────────────────────────────────
 server:
   port: ${SERVER_PORT:8080}
+  # Graceful shutdown: waits for in-flight requests to complete before stopping.
   shutdown: graceful
 
-# ── Spring Boot Actuator ─────────────────────────────────────
+# ── Spring Boot Actuator ─────────────────────────────────────────────────────
 # Exposes /actuator/health so the Docker HEALTHCHECK can probe
 # the real application status (DB connectivity included).
 management:
@@ -41,9 +113,30 @@ management:
         include: health
   endpoint:
     health:
-      show-details: never   # do not leak stack traces to the outside world
+      show-details: never   # never leak internal details (stack traces, DB info) externally
 
+# ── Logging ──────────────────────────────────────────────────────────────────
 logging:
   level:
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.hibernate.SQL: DEBUG                              # log every SQL statement
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE  # log bound parameter values
+
+# ── Application security ─────────────────────────────────────────────────────
+# Credentials for the single in-memory user managed by Spring Security.
+# Override via environment variables before starting the application:
+#
+#   Linux/macOS:   export APP_SECURITY_USERNAME=admin
+#                  export APP_SECURITY_PASSWORD=mysecret
+#
+#   PowerShell:    $env:APP_SECURITY_USERNAME = "admin"
+#                  $env:APP_SECURITY_PASSWORD = "mysecret"
+#
+#   Docker (.env): APP_SECURITY_USERNAME=admin
+#                  APP_SECURITY_PASSWORD=mysecret
+#
+# ⚠️  Change the default password before deploying to any shared environment.
+app:
+  security:
+    username: ${APP_SECURITY_USERNAME:admin}
+    password: ${APP_SECURITY_PASSWORD:admin}
+

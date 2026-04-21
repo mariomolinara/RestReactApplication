@@ -8,6 +8,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -63,10 +64,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * ── TEST ISOLATION ────────────────────────────────────────────────────────────
  * @BeforeEach deleteAll() resets the database before every test, so each
  * test is completely independent of the others' side effects.
+ *
+ * ── AUTHENTICATION IN TESTS ───────────────────────────────────────────────────
+ * All /api/v1/** endpoints require an authenticated session (Spring Security).
+ * @WithMockUser at the class level injects a synthetic "user" principal into the
+ * SecurityContext for every @Test method, bypassing the real login flow.
+ * This lets integration tests focus on the full HTTP → Controller → DB flow
+ * rather than the authentication protocol.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
+@WithMockUser   // injects a mock USER-role principal into every test's SecurityContext
 class FriendIntegrationTest {
 
     private static final String BASE = "/api/v1/friends";

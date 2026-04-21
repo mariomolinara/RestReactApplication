@@ -8,6 +8,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -23,9 +24,69 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Controller-layer tests executed via MockMvc against a real PostgreSQL database
  * provided by Testcontainers.
  *
+ * ── WHAT IS A MOCK? ───────────────────────────────────────────────────────────
+ * A "mock" is a test double — a substitute object that simulates the behaviour
+ * of a real component without actually being one.
+ *
+ * Mocks are used to:
+ *   1. Replace slow or unavailable dependencies (network, filesystem, database).
+ *   2. Isolate the unit under test so that failures pinpoint the right layer.
+ *   3. Control what a dependency returns so edge cases can be reproduced reliably.
+ *
+ * The most popular mocking library in the Java ecosystem is Mockito.
+ * Example of a Mockito mock (NOT used here — shown for comparison only):
+ *
+ *   FriendRepository repo = Mockito.mock(FriendRepository.class);
+ *   when(repo.findById(1L)).thenReturn(Optional.of(new Friend("Alice", …)));
+ *   // repo.findById(1L) now returns the fake Optional without touching the DB.
+ *
+ * In this test class we do NOT mock FriendRepository because we want to test
+ * the full stack all the way to a real PostgreSQL database.
+ * The only "mocks" used here are:
+ *   - MockMvc      → mocks the HTTP transport layer (no TCP socket)
+ *   - @WithMockUser → mocks the authenticated principal (no real login)
+ *
+ * ── WHAT IS MockMvc? ──────────────────────────────────────────────────────────
+ * MockMvc is a Spring Test utility that lets you fire HTTP requests against the
+ * DispatcherServlet in-process, without starting a real HTTP server or opening
+ * any network socket.
+ *
+ * It is NOT a full mock of the HTTP stack: filters, interceptors, controller
+ * advice, JSON serialisation, and Spring Security filters all run normally.
+ * What is "mocked" (i.e., bypassed) is only the TCP transport — the request
+ * never leaves the JVM. This makes tests:
+ *   - Fast:         no port binding, no socket overhead.
+ *   - Deterministic: no flakiness from random port allocation or OS limits.
+ *   - Inspectable:  MockMvc gives direct access to status, headers and body.
+ *
+ * Typical usage pattern:
+ *   mockMvc.perform(get("/api/v1/friends"))    // build & dispatch the request
+ *          .andExpect(status().isOk())          // assert HTTP status
+ *          .andExpect(jsonPath("$.content", hasSize(2)));  // assert JSON body
+ *
+ * ── WHAT IS @WithMockUser? ────────────────────────────────────────────────────
+ * Spring Security requires an authenticated principal for every request to
+ * protected endpoints. In tests, performing a real login (POST /api/auth/login,
+ * receive cookie, attach cookie to every request) would be verbose and slow.
+ *
+ * @WithMockUser is a Spring Security Test annotation that injects a synthetic
+ * UserDetails object directly into the SecurityContext before each @Test method
+ * runs, completely bypassing the authentication filter chain.
+ *
+ * By default it creates a user with:
+ *   - username: "user"
+ *   - password: "password" (never verified — authentication is skipped)
+ *   - roles:    ["USER"]  → authorities: ["ROLE_USER"]
+ *
+ * You can customise it:
+ *   @WithMockUser(username = "admin", roles = {"USER", "ADMIN"})
+ *
+ * Applied at the class level (as here) it affects every @Test method in the
+ * class. It can also be applied per-method to override the class-level default.
+ *
  * ── DEPENDENCY INJECTION IN TESTS ─────────────────────────────────────────────
  * @SpringBootTest tells Spring to start the full ApplicationContext (all beans,
- * auto-configuration, JPA, web layer, …) exactly as it would in production.
+ * auto-configuration, JPA, web layer, security, …) exactly as it would in production.
  *
  * @AutoConfigureMockMvc asks Spring to also create a MockMvc bean and add it to
  * the context. MockMvc simulates HTTP requests without opening a real TCP socket,
@@ -47,10 +108,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * entire test class. @ServiceConnection wires its JDBC URL and credentials into
  * Spring's DataSource automatically — IoC applied at the infrastructure level.
  * @BeforeEach deleteAll() guarantees every test starts with an empty table.
+ *
+ * ── AUTHENTICATION IN TESTS ───────────────────────────────────────────────────
+ * All /api/v1/** endpoints require an authenticated session (Spring Security).
+ * @WithMockUser at the class level injects a synthetic "user" principal into the
+ * SecurityContext for every @Test method, bypassing the real login flow.
+ * This keeps tests focused on controller behaviour rather than the auth protocol,
+ * which is covered separately by integration tests for AuthController.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
+@WithMockUser   // injects a mock USER-role principal into every test's SecurityContext
 class FriendControllerTest {
 
     private static final String BASE = "/api/v1/friends";
@@ -59,6 +128,10 @@ class FriendControllerTest {
      * Testcontainers manages a real PostgreSQL 17 Docker container.
      * @ServiceConnection reads the container's host/port/credentials and injects
      * them into Spring's DataSource bean — IoC at the infrastructure level.
+     *
+     * Note: this is NOT a mock. Testcontainers starts an actual Docker container
+     * running real PostgreSQL. SQL statements, constraints, and transactions are
+     * all executed against a genuine database engine.
      */
     @Container
     @ServiceConnection
@@ -66,15 +139,23 @@ class FriendControllerTest {
 
     /**
      * MockMvc is injected by Spring (IoC/DI).
+     *
      * It dispatches requests directly to the DispatcherServlet in-process,
-     * exercising the full HTTP stack (filters, controller, serialisation)
-     * without opening a real network socket.
+     * exercising the full HTTP stack (Security filters, controller, JSON
+     * serialisation, JPA, real PostgreSQL) without opening a real network socket.
+     *
+     * Think of MockMvc as a "mock HTTP client + mock HTTP server transport":
+     * the request/response objects are constructed in memory, but every Spring
+     * component in between (filters, interceptors, controller) runs for real.
      */
     @Autowired MockMvc mockMvc;
 
     /**
      * FriendRepository is injected by Spring (IoC/DI).
-     * Used only for test setup/teardown (deleteAll and direct inserts).
+     *
+     * This is the REAL Spring Data JPA proxy — not a Mockito mock.
+     * It is used only for test setup/teardown (deleteAll and direct inserts)
+     * to avoid routing setup data through the HTTP layer.
      * All HTTP-level assertions go through MockMvc so the controller is always
      * part of the test.
      */

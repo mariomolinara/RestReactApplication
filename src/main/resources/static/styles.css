@@ -131,3 +131,96 @@ li span {
   margin-left: 8px;
   vertical-align: middle;
 }
+
+/* ── App header (titolo + info utente + logout) ── */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.app-header h1 {
+  margin: 0;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.95rem;
+  color: #4b5563;
+}
+
+.logout-btn {
+  background: #dc2626;
+  padding: 6px 14px;
+  font-size: 0.875rem;
+}
+
+.logout-btn:hover {
+  background: #b91c1c;
+}
+
+/* ── Session check (spinner testuale) ── */
+.session-check {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  font-size: 1.1rem;
+  color: #6b7280;
+}
+
+/* ── Login page ── */
+.login-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: #f4f6fb;
+  padding: 24px;
+}
+
+.login-card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 40px 36px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.login-title {
+  margin: 0 0 4px;
+  font-size: 1.6rem;
+  text-align: center;
+  color: #1f2937;
+}
+
+.login-subtitle {
+  margin: 0 0 28px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
+.login-btn {
+  width: 100%;
+  padding: 10px;
+  font-size: 1rem;
+  margin-top: 8px;
+  background: #2563eb;
+}
+
+.login-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.login-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+

@@ -38,6 +38,19 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
+        <!-- Spring Security: protegge le API REST con autenticazione basata su sessione -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- Spring Security Test: @WithMockUser per i test MockMvc con Security attivo -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <!-- Actuator: exposes /actuator/health used by the Docker HEALTHCHECK -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
