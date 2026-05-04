@@ -114,10 +114,27 @@ async function apiFetch(url, options = {}) {
 // the form's data always available in JS without querying the DOM.
 // =============================================================================
 function LoginPage({ onLogin }) {
-  const [username, setUsername] = useState("");   // controlled: username field
-  const [password, setPassword] = useState("");   // controlled: password field
+  // ── Controlled input state ────────────────────────────────────────────────
+  // "Remember me": on mount, read the last username from localStorage (if any)
+  // so the user does not have to retype it on every visit.
+  // localStorage is a synchronous browser key-value store persisted across
+  // sessions (unlike sessionStorage which is cleared when the tab closes).
+  const [username, setUsername] = useState(
+    () => localStorage.getItem("rememberedUsername") || ""
+  );
+  const [password, setPassword] = useState("");   // never stored — security risk
   const [error, setError]       = useState("");   // "" means "no error to show"
   const [loading, setLoading]   = useState(false);// prevents double-submit
+
+  // showPassword: toggles the <input type> between "password" (masked) and
+  // "text" (visible). Purely a client-side UX feature — the value is unchanged.
+  const [showPassword, setShowPassword] = useState(false);
+
+  // rememberMe: if true, the username is persisted to localStorage on login.
+  // Initialised from localStorage so the checkbox restores its previous state.
+  const [rememberMe, setRememberMe] = useState(
+    () => localStorage.getItem("rememberMe") === "true"
+  );
 
   // ── handleSubmit ────────────────────────────────────────────────────────
   // Called when the <form> fires its "submit" event (Enter key or button click).
@@ -149,9 +166,19 @@ function LoginPage({ onLogin }) {
         // include it automatically — no manual cookie management needed.
         const data = await response.json();
 
+        // ── Remember me ─────────────────────────────────────────────────
+        // Persist (or remove) the username in localStorage based on the
+        // checkbox. The password is NEVER stored — only the username,
+        // which is not sensitive and only saves the user a few keystrokes.
+        if (rememberMe) {
+          localStorage.setItem("rememberedUsername", username);
+          localStorage.setItem("rememberMe", "true");
+        } else {
+          localStorage.removeItem("rememberedUsername");
+          localStorage.setItem("rememberMe", "false");
+        }
+
         // Lift the username up to App via the onLogin callback.
-        // App stores it in state → re-render → LoginPage is unmounted →
-        // main application view is mounted.
         onLogin(data.username);
       } else {
         // 401 Unauthorized: wrong credentials. Show a user-friendly message.
@@ -198,13 +225,47 @@ function LoginPage({ onLogin }) {
 
         <label>
           Password
+          {/* ── Show / hide password toggle ────────────────────────────────
+              The wrapper div uses position:relative so the button can be
+              positioned absolutely inside it (see styles.css).
+              Changing type between "password" and "text" is a standard
+              browser mechanism — the value is never altered.
+              The button uses type="button" to prevent accidental form submit.
+              aria-label provides a text description for screen readers. */}
+          <div className="password-wrapper">
+            <input
+              type={showPassword ? "text" : "password"}
+              required
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <button
+              type="button"
+              className="toggle-password"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              onClick={() => setShowPassword((prev) => !prev)}
+            >
+              {/* Unicode eye icons — no image dependency required.
+                  👁 = eye open (password visible)
+                  🔒 = lock (password hidden) */}
+              {showPassword ? "👁" : "🔒"}
+            </button>
+          </div>
+        </label>
+
+        {/* ── Remember me checkbox ─────────────────────────────────────────
+            A standard HTML checkbox bound to rememberMe state.
+            When checked, the username is saved to localStorage on successful
+            login and pre-filled the next time the page loads.
+            The password is intentionally never stored. */}
+        <label className="remember-me">
           <input
-            type="password"    // masks the input characters
-            required
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            type="checkbox"
+            checked={rememberMe}
+            onChange={(e) => setRememberMe(e.target.checked)}
           />
+          Remember my username
         </label>
 
         {/* disabled={loading} prevents double-submission while the request
@@ -382,7 +443,16 @@ function App() {
     const params = new URLSearchParams({ page: p, q });
     try {
       const response = await apiFetch(`${API_BASE}?${params}`);
-      if (!response.ok) throw new Error("Cannot load friends");
+      if (!response.ok) {
+        // Include the HTTP status code so the user (and developer) can
+        // understand whether this is a server error (5xx), a routing issue
+        // (404), or something else. 401 is already handled by apiFetch above.
+        throw new Error(`Cannot load friends (HTTP ${response.status}). ${
+          response.status >= 500
+            ? "The server or database may be unavailable."
+            : ""
+        }`);
+      }
       const data = await response.json();
 
       // Spread the page data into the corresponding state variables.
@@ -525,8 +595,10 @@ function App() {
   // Copies a friend object into the draft state, which:
   //   1. Pre-fills <FriendForm> with the friend's current values.
   //   2. Sets draft.id to a truthy value → FriendForm switches to "edit mode".
+  // phone is coerced to "" if null so the controlled <input> always receives
+  // a string — React warns if value switches between null/undefined and a string.
   // ─────────────────────────────────────────────────────────────────────────
-  function startEdit(friend) { setDraft(friend); }
+  function startEdit(friend) { setDraft({ ...friend, phone: friend.phone ?? "" }); }
 
   // ── Render ───────────────────────────────────────────────────────────────
   //
@@ -561,8 +633,18 @@ function App() {
         </div>
       </div>
 
-      {/* Global error banner — only rendered when error is non-empty. */}
-      {error && <p className="error">{error}</p>}
+      {/* Global error banner — only rendered when error is non-empty.
+          A "Sign out" shortcut is shown alongside the message so the user
+          can recover from a stale session (e.g. the DB is down but the
+          browser still holds a valid JSESSIONID from a previous login). */}
+      {error && (
+        <div className="error-banner">
+          <p className="error">{error}</p>
+          <button className="logout-btn error-signout" onClick={handleLogout}>
+            Sign out
+          </button>
+        </div>
+      )}
 
       {/* ── Create / Edit form ───────────────────────────────────────────── */}
       {/* All form data lives in the "draft" state here in App.
